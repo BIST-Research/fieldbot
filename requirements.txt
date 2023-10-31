@@ -5,3 +5,7 @@ matplotlib
 numpy
 pyserial
 pyyaml
+pygnssutils
+gpxpy
+scipy
+

@@ -36,7 +36,6 @@ class AsyncWrite(threading.Thread):
         with open(self.filename, 'wb') as fp:
             fp.write(self.buf)
             
-
 class BatBot:
 
     def __init__(self, bat_log):
@@ -48,8 +47,12 @@ class BatBot:
             bb_conf = yaml.safe_load(fd)
             
             self.echo_book = bb_conf['echo']
+            
+            self.do_plot = bool(self.echo_book['do_plot'])
 
             self.echo_sercom = M4(self.echo_book['serial_numbers'], self.echo_book['num_adc_samples'], bat_log)
+            
+            self.gps_book = bb_conf['gps']
             
             self.echo_f0 = self.echo_book['f0']
             self.echo_f1 = self.echo_book['f1']
@@ -61,6 +64,8 @@ class BatBot:
 
             self.run_directory = self.data_directory + f"/{get_timestamp_now()}"
             os.makedirs(self.run_directory)
+            
+            fd.close()
             
     def send_sweep_freqs(self):
     
@@ -109,3 +114,12 @@ class BatBot:
 
     def send_amp_start(self):
         self.echo_sercom.write([0xfe])
+        
+    def get_gps_book(self):
+        return self.gps_book
+        
+    def get_run_directory(self):
+        return self.run_directory
+        
+    def get_do_plot(self):
+        return self.do_plot

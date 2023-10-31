@@ -1,6 +1,7 @@
 data_directory: "data_dst"
 
 echo:
+    do_plot: false
     serial_numbers:
         - "FBD7447F5351523450202020FF0E320A" #brunei original
         - "3BF9331F5351523450202020FF111D35" #brunei 50ms
@@ -39,17 +40,35 @@ echo:
         NFFT: 512
         noverlap: 400
 
-force:
-    serial_number: "A597C94353544C324E202020FF18412B"
-    page_size: 2048
-    baud: 9600
 
-motor_pantilt:
-    serial_number: "13613280"
+
+gps:
+    do_gps: true
     
-motor_right:
-    serial_number: "13615010"
-    
-motor_left:
-    serial_number: "13613200"
-    
+    ser_port: "/dev/ttyACM1"
+    baud_rate: 9600
+    timeout: 3
+   
+    do_rtk_correction: true
+    ntrip:
+        ipprot: "IPv4"
+        server: "rtk2go.com"
+        port: 2101
+        flowinfo: 0     # IPv6 -- not implemented yet
+        scopeid: 0      # IPv6 -- not implemented yet
+        mountpoint: ""  # Autodetects mountpoint, leave as is for now
+        username: "bwestcott@vt.edu"
+        password: "none"
+        
+        ggamode: 0
+        ggaint: 60
+        
+        # Ignored unless ggamode = 1
+        reflat: 37.2223
+        reflon: -80.4257
+        refalt: 40.8542
+        refsep: 26.1743
+
+        
+   
+   
