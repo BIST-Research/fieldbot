@@ -1,7 +1,9 @@
+
+
 data_directory: "data_dst"
 
 echo:
-    do_plot: false
+    do_plot: true
     serial_numbers:
         - "FBD7447F5351523450202020FF0E320A" #brunei original
         - "3BF9331F5351523450202020FF111D35" #brunei 50ms

@@ -33,20 +33,6 @@ from pyubx2 import(
     VALCKSUM
 )
 
-XML_HDR = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-
-GPX_NS = " ".join(
-    (
-        'xmlns:"http://www.topografix.com/GPX/1/1"',
-        'creator="bepiis" version="1.0"',
-        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"',
-        'xsi:schemaLocation="http://www.topografix.com/GPX/1/1"',
-        '"http://www.topografix.com/GPX/1/1/gpx.xsd"'
-    )
-)
-
-GITHUB_LINK = "https://github.com/BIST-Research/"
-
 class mlgps:
 
     def __init__(
@@ -85,12 +71,19 @@ class mlgps:
         self.alt = 0
         self.sep = 0
         
+        self._init_gpx()        
+        self.points_per_gpx = 60
+        
+
+    def _init_gpx(self):
         self.gpx = gpxpy.gpx.GPX()
+        self.gpx.name = 'fieldbot'
+        self.gpx.description = 'fieldbot GPS data'
+
         self.gpx_track = gpxpy.gpx.GPXTrack()
         self.gpx.tracks.append(self.gpx_track)
         self.gpx_segment = gpxpy.gpx.GPXTrackSegment()
         self.gpx_track.segments.append(self.gpx_segment)
-
         
     def __enter__(self):
         return self
@@ -135,8 +128,16 @@ class mlgps:
             validate = VALCKSUM
         )
         
+        gpx_track_no = 0
+        
         while not stopevent.is_set():
             try:
+            
+                if gpx_track_no >= self.points_per_gpx:
+                    self.write_gpx_tlr()
+                    self._init_gpx()
+                    gpx_track_no = 0
+            
                 if stream.in_waiting:
                     _, msg = ubx_reader.read()
                     
@@ -161,10 +162,13 @@ class mlgps:
                             #print(msg)
                             tkpoint.type_of_gpx_fix=fix
                             self.gpx_segment.points.append(tkpoint)
+                            gpx_track_no += 1
 
                         
                 if self.sendqueue is not None:
                     self._send_data(ubx_reader.datastream, sendqueue)
+                
+
                     
                         
             except(UBXMessageError, UBXParseError, NMEAMessageError, NMEAParseError, RTCMMessageError, RTCMParseError) as err:
@@ -224,44 +228,12 @@ class mlgps:
         
         msg = UBXMessage.config_set(layers, transaction, cfg_data)
         self.sendqueue.put((msg.serialize(), msg))
-        
-    def write_gpx_header(self):
-        
-        timestamp = strftime("%Y%m%d%H%M%S")
-        self._trkfname = os.path.join(self.dump_path, f"gpxtrack-{timestamp}.gpx")
-        self._trkfile = open(self._trkfname, "a")
-        
-        date = datetime.now().isoformat()
-        
-        gpxtrack = (
-            XML_HDR + "<gpx>"
-            "<metadata>"
-            f'<link href="{GITHUB_LINK}"><text>bepiis</text></link><time>{date}</time>'
-            "</metadata>"
-            "<trk><name>GPX track from UBX NAV-PVT datalog</name><trkseg>"
-        )
-        
-        self._trkfile.write(gpxtrack)
-        
-    def write_gpx_trkpnt(self, lat, lon, ele, time, fix):
-        
-        trkpnt = f'<trkpnt> lat="{lat}" lon="{lon}"'
-        trkpnt += f"<ele>{ele}</ele>"
-        trkpnt += f"<time>{time}</time>"
-        trkpnt += f"<fix>{fix}</fix>"
-        trkpnt += f"</trkpnt>"
-        
-        self._trkfile.write(trkpnt)
                         
     def write_gpx_tlr(self):
-        #gpxtrack = "</trkseg></trk></gpx>"
-        #self._trkfile.write(gpxtrack)
-        #self._trkfile.close()
-        
         timestamp = strftime("%Y%m%d%H%M%S")
         gpx_name = os.path.join(self.dump_path, f"gpx_{timestamp}.gpx")
         xml_out = self.gpx.to_xml()
-        print(xml_out)
+        #print(xml_out)
         with open(gpx_name, "w") as gpx_write:
             gpx_write.write(xml_out)
             gpx_write.close()

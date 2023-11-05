@@ -71,10 +71,13 @@ class BBPlotter:
         
         
     def echo_calibration_run(self, data):
-        cs0, cf0, ct0 = mlab.specgram(data[0], Fs=self.echo_Fs, NFFT=self.echo_NFFT, noverlap=self.echo_noverlap)
+        sig0 = data[0]
+
+        cs0, cf0, ct0 = mlab.specgram(sig0[5000:], Fs=self.echo_Fs, NFFT=self.echo_NFFT, noverlap=self.echo_noverlap)
         self.calib_s0 = cs0
-        
-        cs1, cf1, ct1 = mlab.specgram(data[1], Fs=self.echo_Fs, NFFT=self.echo_NFFT, noverlap=self.echo_noverlap)
+
+        sig1 = data[1]
+        cs1, cf1, ct1 = mlab.specgram(sig1[1000:], Fs=self.echo_Fs, NFFT=self.echo_NFFT, noverlap=self.echo_noverlap)
         self.calib_s1 = cs1
         
         
@@ -119,17 +122,19 @@ class BBPlotter:
     
         self.adc0_amplitude_ax.plot(data[0])
         self.adc1_amplitude_ax.plot(data[1])
-        
-        s0, f0, t0 = mlab.specgram(signal.sosfilt(self.sos, data[0]), NFFT=self.echo_NFFT, Fs=self.echo_Fs, noverlap=self.echo_noverlap)
-        
-        pcm0 = self.adc0_spec_ax.pcolormesh(t0, f0, s0, cmap=self.echo_spec_cmap, shading='auto', norm=colors.LogNorm(vmin=self.calib_s0.min(), vmax=self.calib_s0.max()))
-        
+
+        sig0 = data[0]
+        s0, f0, t0 = mlab.specgram(signal.sosfilt(self.sos, sig0), NFFT=self.echo_NFFT, Fs=self.echo_Fs, noverlap=self.echo_noverlap)
+
+        #pcm0 = self.adc0_spec_ax.pcolormesh(t0, f0, s0, cmap=self.echo_spec_cmap, shading='auto', norm=colors.LogNorm(vmin=self.calib_s0.min(), vmax=self.calib_s0.max()))
+        pcm0 = self.adc0_spec_ax.pcolormesh(t0, f0, s0, cmap=self.echo_spec_cmap, norm=colors.LogNorm(vmin=self.calib_s0.min(), vmax=self.calib_s0.max()))
         self.figure.colorbar(pcm0, cax=self.adc0_spec_cax)
-        
-        s1, f1, t1 = mlab.specgram(signal.sosfilt(self.sos, data[1]), NFFT=self.echo_NFFT, Fs=self.echo_Fs, noverlap=self.echo_noverlap)
-        
+
+        sig1 = data[1]
+        s1, f1, t1 = mlab.specgram(signal.sosfilt(self.sos, sig1), NFFT=self.echo_NFFT, Fs=self.echo_Fs, noverlap=self.echo_noverlap)
+
         pcm1 = self.adc1_spec_ax.pcolormesh(t1, f1, s1, cmap=self.echo_spec_cmap, shading='auto', norm=colors.LogNorm(vmin=self.calib_s1.min(), vmax=self.calib_s1.max()))
-        
+
         self.figure.colorbar(pcm1, cax=self.adc1_spec_cax)
         
         plt.show(block=False)
