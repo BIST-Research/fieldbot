@@ -14,6 +14,7 @@
 
 #define JETSON_SERIAL Serial
 //#define N_ADC_SAMPLES 16000
+//#define N_DAC_SAMPLES 4000
 
 
 #define JOB_STATUS_LED_CHANNEL                   ML_TCC0_CH3
@@ -83,51 +84,13 @@ void emit_resonator_timer_init(void)
   
 }
 
-// 1Mhz sampling freq, chirp duration of 5E-3
-// sample rate = (resolution + 1 + samplen)/(ADC_GCLK / PRESCALE) = PRESCALE*(res + 1 + smp)/ADC_GCLK
-// PRESCALE = ADC_GCLK * SAMPLE_RATE /(res + 1 + samp)
-// PRESCALE = 120MHz * 1us/(12 + 1 + 2) = 8 -> ADC_CTRLA_PRESCALER_DIV8
-// NUM_SAMPLES = 1Mhz * 5ms = 5000 samples
-const int sample_freq = 400E3;
-const double chirp_duration = 4E-3;
-const uint16_t num_samples = 2000;   //Changed for serial output
+static uint16_t chirp_out_buffer[N_DAC_SAMPLES];
 
-static uint16_t chirp_out_buffer[num_samples];
-
-uint32_t generate_chirp(const int f0, const int f1)
+uint32_t init_chirp_buffer(void)
 {
-
-  const double t1 = chirp_duration;
-
-  const double phi = 0;
-
-  //const int f0 = 150E3;
-  //const int f1 = 20E3;
-
-  const double k = (f1 - f0) / t1;
-
-  for(int i = num_samples - 1; i >= 0; --i)
-  {
-
-    // time step
-    double t = t1 * ((double)i / num_samples);
-
-    // time domain model for a bat chirp
-    //double chirp = cos(phi + 2*PI * (k * t + k/2 + t * t));
-    double chirp = cos(phi + 2*PI*((k/2)*t*t + f0*t));
-
-    // Hanning window - remove harmonics from frequency distribution, leave fundemental frequencies
-    double window = 0.5 * (1 - cos(2*PI * i/(num_samples - 1)));
-
-    // fill DMA buffer 
-    chirp_out_buffer[i] = (uint16_t)((4096/2) * (1 + chirp * window));
-  }
-  //chirp_out_buffer[4095] = 0;
-  return (uint32_t)&chirp_out_buffer[0] + num_samples * sizeof(uint16_t);
+  bzero((void *)chirp_out_buffer, sizeof(uint16_t) * N_DAC_SAMPLES);
+  return (uint32_t)&chirp_out_buffer[0] + N_DAC_SAMPLES * sizeof(uint16_t);
 }
-
-// number of arrays of ADC samples we need
-const uint32_t num_pages = 7;               //Can be 8, needs to be 7 for compatibility
 
 // DMAC looks for the base descriptor when serving a request
 static DmacDescriptor base_descriptor[3] __attribute__((aligned(16)));
@@ -192,7 +155,7 @@ void emit_modulator_timer_init(void)
 
   DMAC_descriptor_init(
     chirp_out_dmac_descriptor_settings,
-    num_samples,
+    N_DAC_SAMPLES,
     chirp_out_source_address,
     (uint32_t) &TCC1->CCBUF[EMIT_MODULATOR_TIMER_CHANNEL],
     (uint32_t) &base_descriptor[DMAC_EMIT_MODULATOR_TIMER_CHANNEL],
@@ -203,29 +166,29 @@ void emit_modulator_timer_init(void)
 void dac_sample_timer_init(void)
 {
 
-  GCLK->PCHCTRL[TC3_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK4;
+  GCLK->PCHCTRL[TC3_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK7;
 
-  TC3->COUNT8.CTRLA.bit.ENABLE = 0x00;
-  while(TC3->COUNT8.SYNCBUSY.bit.ENABLE != 0U);
+  TC3->COUNT32.CTRLA.bit.ENABLE = 0x00;
+  while(TC3->COUNT32.SYNCBUSY.bit.ENABLE != 0U);
 
-  TC3->COUNT8.CTRLA.bit.SWRST = 0x01;
-  while(TC3->COUNT8.SYNCBUSY.bit.SWRST);
+  TC3->COUNT32.CTRLA.bit.SWRST = 0x01;
+  while(TC3->COUNT32.SYNCBUSY.bit.SWRST);
 
-  TC3->COUNT8.CTRLA.reg = 
+  TC3->COUNT32.CTRLA.reg = 
   (
-    TC_CTRLA_MODE_COUNT16 |
+    TC_CTRLA_MODE_COUNT32 |
     TC_CTRLA_PRESCSYNC_PRESC |
     TC_CTRLA_PRESCALER_DIV1 
   );
 
-  TC3->COUNT8.WAVE.reg = TC_WAVE_WAVEGEN_MFRQ;
+  TC3->COUNT32.WAVE.reg = TC_WAVE_WAVEGEN_MFRQ;
   //TC3->COUNT8.PER.reg = TC_COUNT8_PER_PER(48);
-  TC3->COUNT8.CC[0].reg = 30;
+  TC3->COUNT32.CC[0].reg = N_DAC_TIMER;
 
-  while(TC3->COUNT8.SYNCBUSY.bit.CC0);
+  while(TC3->COUNT32.SYNCBUSY.bit.CC0);
 
-  TC3->COUNT8.CTRLA.bit.ENABLE=1;
-  while(TC3->COUNT8.SYNCBUSY.bit.ENABLE);
+  TC3->COUNT32.CTRLA.bit.ENABLE=1;
+  while(TC3->COUNT32.SYNCBUSY.bit.ENABLE);
 
   peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
 
@@ -248,7 +211,7 @@ void wait_timer_init(void)
 
   TCC2->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ | TCC_WAVE_POL0;
 
-  TCC_set_period(TCC2, 5);
+  TCC_set_period(TCC2, N_WAIT_TIMER);
 
   TCC_SET_ONESHOT(TCC2);
   TCC_sync(TCC2);
@@ -365,6 +328,12 @@ void hardware_int_trigger_init(void)
 
 }
 
+const uint32_t dac_pin = g_APinDescription[A0].ulPin;
+const EPortType dac_port_grp = g_APinDescription[A0].ulPort;
+
+#define DISABLE_DAC_OUTPUT() (PORT->Group[PF_A].PINCFG[2].bit.PMUXEN = 0x00)
+#define ENABLE_DAC_OUTPUT() (PORT->Group[PF_A].PINCFG[2].bit.PMUXEN = 0x01)
+
 #define DAC_DMAC_CHANNEL 0x02
 
 void dac_init(void)
@@ -375,13 +344,13 @@ void dac_init(void)
   while (DAC->SYNCBUSY.bit.ENABLE || DAC->SYNCBUSY.bit.SWRST);
 
   // Use an external reference voltage (see errata; the internal reference is busted)
-  DAC->CTRLB.reg = DAC_CTRLB_REFSEL_VDDANA;
+  DAC->CTRLB.reg = DAC_CTRLB_REFSEL_VREFPB;
   while (DAC->SYNCBUSY.bit.ENABLE || DAC->SYNCBUSY.bit.SWRST);
 
-  DAC->DACCTRL[0].reg |= DAC_DACCTRL_CCTRL_CC1M;
+  DAC->DACCTRL[0].reg |= DAC_DACCTRL_CCTRL_CC12M;
 
-  const uint32_t dac_pin = g_APinDescription[A0].ulPin;
-  const EPortType dac_port_grp = g_APinDescription[A0].ulPort;
+  //const uint32_t dac_pin = g_APinDescription[A0].ulPin;
+  //const EPortType dac_port_grp = g_APinDescription[A0].ulPort;
   
   PORT->Group[dac_port_grp].PINCFG[dac_pin].reg |= PORT_PINCFG_DRVSTR;
 
@@ -402,15 +371,15 @@ void dac_init(void)
   DMAC_descriptor_init
   (
     chirp_out_dmac_descriptor_settings,
-    num_samples,
+    N_DAC_SAMPLES,
     chirp_out_source_address,
-    (uint32_t) &DAC->DATA[0],
+    (uint32_t) &DAC->DATA[0].reg,
     (uint32_t) &base_descriptor[2],
     &base_descriptor[2]
   );
-}
 
-const uint16_t num_adc_samples = 30000;
+  peripheral_port_init(PORT_PMUX_PMUXE(PF_B), A0, ANALOG, DRIVE_ON);
+}
 
 #define PASTE_FUSE(REG) ((*((uint32_t *) (REG##_ADDR)) & (REG##_Msk)) >> (REG##_Pos))
 
@@ -587,9 +556,12 @@ void adc1_init(void)
 }
 
 typedef enum {IDLE, EMIT, WAIT, LISTEN} data_acquisition_state;
-typedef enum {START_JOB = 0x10, AMP_STOP = 0xff, AMP_START = 0xfe, GET_RUN_INFO = 0xfd} host_command;
+typedef enum {START_JOB = 0x10, AMP_STOP = 0xff, AMP_START = 0xfe, GET_RUN_INFO = 0xfd, GET_CHIRP = 0x2f} host_command;
+typedef enum {DO_CHIRP = 0x4f, DONT_CHIRP = 0x4e} run_info;
 
 data_acquisition_state dstate = IDLE;
+
+boolean do_emit_chirp = true;
 
 void setup(void) 
 {
@@ -599,10 +571,8 @@ void setup(void)
   //while(!Serial);
 
 //#endif
-  int f0 = 150E3;
-  int f1 = 10E3;
-
-  chirp_out_source_address = generate_chirp(f0, f1);
+  chirp_out_source_address = init_chirp_buffer();
+  //chirp_out_source_address = generate_chirp(80E3, 20E3);
 
   MCLK_init();
   GCLK_init();
@@ -681,6 +651,9 @@ boolean wait_stop_intflag = false;
 boolean adc0_done_intflag = false;
 boolean adc1_done_intflag = false;
 
+#define SERIAL_ACK 0x55
+#define SERIAL_WRITE_ACK() (JETSON_SERIAL.write(SERIAL_ACK))
+
 void loop(void) 
 {
   
@@ -695,8 +668,14 @@ void loop(void)
 
         //TCC_FORCE_RETRIGGER(TCC1);
         //TCC_sync(TCC1);
+        if(do_emit_chirp)
+        {
+          ML_DMAC_CHANNEL_RESUME(DMAC_EMIT_MODULATOR_TIMER_CHANNEL);
+        } else 
+        {
+          emit_stop_intflag=true;
+        }
 
-        ML_DMAC_CHANNEL_RESUME(DMAC_EMIT_MODULATOR_TIMER_CHANNEL);
 
         dstate = EMIT;       
 
@@ -795,34 +774,47 @@ void loop(void)
 
       if(dstate == IDLE && opcode == START_JOB)
       {
+
+        do_emit_chirp = (boolean)JETSON_SERIAL.read();
+
         emit_start_intflag = true;
 
         job_led_toggle();
+
+
+        //SERIAL_WRITE_ACK();
+
+        
       }
     }
 
     else if(opcode == AMP_STOP)
     {
       amp_disable();
+      //SERIAL_WRITE_ACK();
     }
 
     else if(opcode == AMP_START)
     {
       amp_enable();
+      //SERIAL_WRITE_ACK();
     }
-    else if(opcode == GET_RUN_INFO)
+    
+    else if (opcode == GET_CHIRP)
     {
 
-      int f0_recv = 0;
-      int f1_recv = 0;
+      char recv[2 * N_DAC_SAMPLES];
+      JETSON_SERIAL.readBytes(recv, 2 * N_DAC_SAMPLES);
 
-      for(int8_t j = (32 - 8) ; j >= 0; j -= 8)
+      uint16_t *buf = reinterpret_cast<uint16_t *>(&recv[0]);
+      
+      for(int i=0; i < N_DAC_SAMPLES; i++)
       {
-        f0_recv |= JETSON_SERIAL.read() << j;
-        f1_recv |= JETSON_SERIAL.read() << j;
+        chirp_out_buffer[i]  = buf[i];
       }
+      
+      //SERIAL_WRITE_ACK();
 
-      generate_chirp(f0_recv, f1_recv);
     }
   }
 #endif
