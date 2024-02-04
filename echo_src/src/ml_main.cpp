@@ -13,8 +13,12 @@
 #include <wiring_private.h>
 
 #define JETSON_SERIAL Serial
-//#define N_ADC_SAMPLES 16000
-//#define N_DAC_SAMPLES 4000
+#define N_1ADC
+
+#define N_ADC_SAMPLES 30000
+#define N_DAC_TIMER 160
+#define N_DAC_SAMPLES 5000
+#define N_WAIT_TIMER 2
 
 
 #define JOB_STATUS_LED_CHANNEL                   ML_TCC0_CH3
@@ -109,7 +113,7 @@ static volatile DmacDescriptor wb_descriptor[3] __attribute__((aligned(16)));
 const uint32_t chirp_out_dmac_channel_settings = DMAC_CHCTRLA_BURSTLEN_SINGLE | //check when testing evsys
                                                  DMAC_CHCTRLA_TRIGACT_BURST |
                                                  //DMAC_CHCTRLA_TRIGSRC(DAC_DMAC_ID_EMPTY_0);
-                                                 DMAC_CHCTRLA_TRIGSRC(TC3_DMAC_ID_OVF);
+                                                 DMAC_CHCTRLA_TRIGSRC(TCC0_DMAC_ID_OVF);
 
 const uint16_t chirp_out_dmac_descriptor_settings = DMAC_BTCTRL_VALID |
                                            //         DMAC_BTCTRL_EVOSEL_BURST | //check when testing evsys
@@ -165,7 +169,7 @@ void emit_modulator_timer_init(void)
 
 void dac_sample_timer_init(void)
 {
-
+/*
   GCLK->PCHCTRL[TC3_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK7;
 
   TC3->COUNT32.CTRLA.bit.ENABLE = 0x00;
@@ -188,9 +192,30 @@ void dac_sample_timer_init(void)
   while(TC3->COUNT32.SYNCBUSY.bit.CC0);
 
   TC3->COUNT32.CTRLA.bit.ENABLE=1;
-  while(TC3->COUNT32.SYNCBUSY.bit.ENABLE);
+  while(TC3->COUNT32.SYNCBUSY.bit.ENABLE);*/
+  GCLK->PCHCTRL[TCC0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK4;
 
-  peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
+    TCC_DISABLE(TCC0);
+    TCC_sync(TCC0);
+    TCC_SWRST(TCC0);
+    TCC_sync(TCC0);
+
+    TCC0->CTRLA.reg = 
+    (
+        TCC_CTRLA_PRESCALER_DIV2 |
+        TCC_CTRLA_PRESCSYNC_PRESC
+    );
+
+    TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ;
+
+    // 12 MHz / (2 * 6) = 1 MHz
+    TCC_set_period(TCC0, 6);
+    TCC_channel_capture_compare_set(TCC0, 0, 3);
+
+  //peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
+
+  TCC_ENABLE(TCC0);
+  TCC_sync(TCC0);
 
 }
 
@@ -206,7 +231,7 @@ void wait_timer_init(void)
   TCC_sync(TCC2);
 
   //120Meg/512 = 468750
-  TCC2->CTRLA.reg = TCC_CTRLA_PRESCALER_DIV256 | 
+  TCC2->CTRLA.reg = TCC_CTRLA_PRESCALER_DIV1 | 
                     TCC_CTRLA_PRESCSYNC_PRESC;
 
   TCC2->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ | TCC_WAVE_POL0;
@@ -568,7 +593,7 @@ void setup(void)
 
 //#ifndef MODE_HARD_TRIG
   JETSON_SERIAL.begin(115200);
-  //while(!Serial);
+  while(!Serial);
 
 //#endif
   chirp_out_source_address = init_chirp_buffer();
@@ -671,6 +696,7 @@ void loop(void)
         if(do_emit_chirp)
         {
           ML_DMAC_CHANNEL_RESUME(DMAC_EMIT_MODULATOR_TIMER_CHANNEL);
+
         } else 
         {
           emit_stop_intflag=true;

@@ -18,6 +18,7 @@ void MCLK_init(void){
   MCLK->APBAMASK.reg |= MCLK_APBAMASK_TC0;
   MCLK->APBBMASK.reg |= MCLK_APBBMASK_TC2;
   MCLK->APBBMASK.reg |= MCLK_APBBMASK_TC3;
+  MCLK->APBCMASK.bit.TCC2_ = true;
 
 }
 
@@ -78,7 +79,7 @@ void GCLK_init(void){
                                   GCLK_PCHCTRL_GEN_GCLK7;    // Route generic clock 1 to TCC0
 
   GCLK->PCHCTRL[DAC_GCLK_ID].reg = GCLK_PCHCTRL_CHEN |        // Enable the TCC0 perhipheral channel
-                                  GCLK_PCHCTRL_GEN_GCLK7;  
+                                  GCLK_PCHCTRL_GEN_GCLK4;  
 
 }
 

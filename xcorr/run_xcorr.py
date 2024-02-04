@@ -91,7 +91,7 @@ sercom.write(byterr)
 
 # Flush out ADCs
 sercom.write([OP_START_JOB, 0x00])
-sercom.read(2*N)
+sercom.read(2 * N)
 
 # send start run, chirp disabled
 sercom.write([OP_START_JOB, 0x00])
