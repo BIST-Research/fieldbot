@@ -202,20 +202,22 @@ void dac_sample_timer_init(void)
 
     TCC0->CTRLA.reg = 
     (
-        TCC_CTRLA_PRESCALER_DIV2 |
+      //  TCC_CTRLA_PRESCALER_DIV2 |
         TCC_CTRLA_PRESCSYNC_PRESC
     );
 
     TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ;
 
     // 12 MHz / (2 * 6) = 1 MHz
-    TCC_set_period(TCC0, 6);
-    TCC_channel_capture_compare_set(TCC0, 0, 3);
+    TCC_set_period(TCC0, 5);
+    TCC_channel_capture_compare_set(TCC0, 1, 3);
 
   //peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
 
   TCC_ENABLE(TCC0);
   TCC_sync(TCC0);
+
+  peripheral_port_init(PORT_PMUX_PMUXO(PF_G), 11, OUTPUT_PULL_DOWN, DRIVE_ON);
 
 }
 
@@ -581,7 +583,7 @@ void adc1_init(void)
 }
 
 typedef enum {IDLE, EMIT, WAIT, LISTEN} data_acquisition_state;
-typedef enum {START_JOB = 0x10, AMP_STOP = 0xff, AMP_START = 0xfe, GET_RUN_INFO = 0xfd, GET_CHIRP = 0x2f} host_command;
+typedef enum {START_JOB = 0x10, AMP_STOP = 0xdd, AMP_START = 0xfe, GET_RUN_INFO = 0xfd, GET_CHIRP = 0x2f} host_command;
 typedef enum {DO_CHIRP = 0x4f, DONT_CHIRP = 0x4e} run_info;
 
 data_acquisition_state dstate = IDLE;
@@ -593,7 +595,8 @@ void setup(void)
 
 //#ifndef MODE_HARD_TRIG
   JETSON_SERIAL.begin(115200);
-  while(!Serial);
+
+
 
 //#endif
   chirp_out_source_address = init_chirp_buffer();
@@ -602,7 +605,6 @@ void setup(void)
   MCLK_init();
   GCLK_init();
 
-  amp_disable();
 
   DMAC_init(&base_descriptor[0], &wb_descriptor[0]);
 
@@ -621,7 +623,7 @@ void setup(void)
 
   dac_sample_timer_init();
 
-  job_led_toggle();
+  //job_led_toggle();
 
   adc0_init();
   adc1_init();
@@ -666,6 +668,9 @@ void setup(void)
 
   ML_DMAC_CHANNEL_ENABLE(ADC1_DMAC_CHANNEL);
   ML_DMAC_CHANNEL_SUSPEND(ADC1_DMAC_CHANNEL);
+
+  amp_disable();
+
 
 }
 
@@ -805,7 +810,7 @@ void loop(void)
 
         emit_start_intflag = true;
 
-        job_led_toggle();
+        //job_led_toggle();
 
 
         //SERIAL_WRITE_ACK();
