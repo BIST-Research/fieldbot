@@ -13,7 +13,7 @@
 #include <wiring_private.h>
 
 #define JETSON_SERIAL Serial
-#define N_1ADC
+//#define N_1ADC
 
 #define N_ADC_SAMPLES 30000
 #define N_DAC_TIMER 160
@@ -209,7 +209,7 @@ void dac_sample_timer_init(void)
     TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ;
 
     // 12 MHz / (2 * 6) = 1 MHz
-    TCC_set_period(TCC0, 5);
+    TCC_set_period(TCC0, 11);
     TCC_channel_capture_compare_set(TCC0, 1, 3);
 
   //peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
@@ -379,9 +379,12 @@ void dac_init(void)
   //const uint32_t dac_pin = g_APinDescription[A0].ulPin;
   //const EPortType dac_port_grp = g_APinDescription[A0].ulPort;
   
-  PORT->Group[dac_port_grp].PINCFG[dac_pin].reg |= PORT_PINCFG_DRVSTR;
+  //PORT->Group[dac_port_grp].PINCFG[dac_pin].reg |= PORT_PINCFG_DRVSTR;
 
   // Enable channel 0
+
+  //DAC->DACCTRL[0].bit.OSR = 0x1;
+
   DAC->DACCTRL[0].bit.ENABLE = 1;
   while(DAC->SYNCBUSY.bit.ENABLE || DAC->SYNCBUSY.bit.SWRST);
 
@@ -392,8 +395,9 @@ void dac_init(void)
     DMAC_CHPRILVL_PRILVL_LVL0
   );
 
+
   //check when testing evsys
-  DMAC_channel_intenset(2, DMAC_2_IRQn, DMAC_CHINTENSET_SUSP, 0);
+  DMAC_channel_intenset(2, DMAC_2_IRQn, DMAC_CHINTENSET_TCMPL, 0);
 
   DMAC_descriptor_init
   (
@@ -424,7 +428,7 @@ const uint16_t adc0_dmac_descriptor_settings =
 (
   DMAC_BTCTRL_BEATSIZE_HWORD |
   DMAC_BTCTRL_DSTINC |
-  DMAC_BTCTRL_EVOSEL_BURST |
+ // DMAC_BTCTRL_EVOSEL_BURST |
   DMAC_BTCTRL_BLOCKACT_BOTH |
   DMAC_BTCTRL_VALID
 );
@@ -459,7 +463,7 @@ void adc0_init(void)
   (
     ADC0_DMAC_CHANNEL,
     DMAC_0_IRQn,
-    DMAC_CHINTENSET_SUSP,
+    DMAC_CHINTENSET_TCMPL,
     0
   );
 
@@ -481,7 +485,7 @@ void adc0_init(void)
 
   ADC0->INPUTCTRL.reg = 
   (
-    ADC_INPUTCTRL_MUXPOS_AIN2 |
+    ADC_INPUTCTRL_MUXPOS_AIN3 |
     ADC_INPUTCTRL_MUXNEG_GND
   );
 
@@ -493,6 +497,8 @@ void adc0_init(void)
   );
 
   ADC0->INTFLAG.reg = ADC_INTFLAG_MASK;
+
+  peripheral_port_init(PORT_PMUX_PMUXO(PF_B), A3, ANALOG, DRIVE_OFF);
   
   ADC_sync(ADC0);
 
@@ -508,7 +514,7 @@ const uint16_t adc1_dmac_descriptor_settings =
 (
   DMAC_BTCTRL_BEATSIZE_HWORD |
   DMAC_BTCTRL_DSTINC |
-  DMAC_BTCTRL_EVOSEL_BURST |
+ // DMAC_BTCTRL_EVOSEL_BURST |
   DMAC_BTCTRL_BLOCKACT_BOTH |
   DMAC_BTCTRL_VALID
 );
@@ -542,7 +548,7 @@ void adc1_init(void)
   (
     ADC1_DMAC_CHANNEL,
     DMAC_1_IRQn,
-    DMAC_CHINTENSET_SUSP,
+    DMAC_CHINTENSET_TCMPL,
     0
   );
 
@@ -564,7 +570,7 @@ void adc1_init(void)
 
   ADC1->INPUTCTRL.reg = 
   (
-    ADC_INPUTCTRL_MUXPOS_AIN10 |
+    ADC_INPUTCTRL_MUXPOS_AIN0 |
     ADC_INPUTCTRL_MUXNEG_GND
   );
 
@@ -589,6 +595,12 @@ typedef enum {DO_CHIRP = 0x4f, DONT_CHIRP = 0x4e} run_info;
 data_acquisition_state dstate = IDLE;
 
 boolean do_emit_chirp = true;
+
+const EPortType dp = g_APinDescription[7].ulPort;
+const uint8_t dpin = g_APinDescription[7].ulPin;
+
+#define SET_DPIN() (PORT->Group[dp].OUTSET.reg = (1 << PORT_OUTSET_OUTSET(dpin)))
+#define UNSET_DPIN() (PORT->Group[dp].OUTCLR.reg = (1 << PORT_OUTCLR_OUTCLR(dpin)))
 
 void setup(void) 
 {
@@ -671,6 +683,14 @@ void setup(void)
 
   amp_disable();
 
+  peripheral_port_init(PORT_PMUX_PMUXE(PF_A), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
+  
+
+
+  PORT->Group[dp].PINCFG[dpin].bit.PMUXEN = 0x00;
+  
+  SET_DPIN();
+
 
 }
 
@@ -698,8 +718,13 @@ void loop(void)
 
         //TCC_FORCE_RETRIGGER(TCC1);
         //TCC_sync(TCC1);
+        ML_DMAC_CHANNEL_RESUME(ADC0_DMAC_CHANNEL);
+        ML_DMAC_CHANNEL_RESUME(ADC1_DMAC_CHANNEL);
+
         if(do_emit_chirp)
         {
+          UNSET_DPIN();
+
           ML_DMAC_CHANNEL_RESUME(DMAC_EMIT_MODULATOR_TIMER_CHANNEL);
 
         } else 
@@ -742,8 +767,8 @@ void loop(void)
       if(wait_stop_intflag)
       {
 
-        ML_DMAC_CHANNEL_RESUME(ADC0_DMAC_CHANNEL);
-        ML_DMAC_CHANNEL_RESUME(ADC1_DMAC_CHANNEL);
+        //ML_DMAC_CHANNEL_RESUME(ADC0_DMAC_CHANNEL);
+        //ML_DMAC_CHANNEL_RESUME(ADC1_DMAC_CHANNEL);
 
         dstate = LISTEN;
 
@@ -759,6 +784,8 @@ void loop(void)
 
       if(adc0_done_intflag & adc1_done_intflag)
       {
+        SET_DPIN();
+
 
         adc0_done_intflag = adc1_done_intflag = false;
 
@@ -855,9 +882,11 @@ void loop(void)
 void DMAC_0_Handler(void)
 {
 
-  if(ML_DMAC_CHANNEL_IS_SUSP(ADC0_DMAC_CHANNEL))
+  if(DMAC->Channel[ADC0_DMAC_CHANNEL].CHINTFLAG.bit.TCMPL)
   {
     ML_DMAC_CHANNEL_CLR_SUSP_INTFLAG(ADC0_DMAC_CHANNEL);
+    DMAC->Channel[ADC0_DMAC_CHANNEL].CHINTFLAG.bit.TCMPL = 0x01;
+
 
     adc0_done_intflag = true;
   }
@@ -867,10 +896,12 @@ void DMAC_0_Handler(void)
 void DMAC_1_Handler(void)
 {
 
-  if(ML_DMAC_CHANNEL_IS_SUSP(ADC1_DMAC_CHANNEL))
+  if(DMAC->Channel[ADC1_DMAC_CHANNEL].CHINTFLAG.bit.TCMPL)
   {
 
     ML_DMAC_CHANNEL_CLR_SUSP_INTFLAG(ADC1_DMAC_CHANNEL);
+    DMAC->Channel[ADC1_DMAC_CHANNEL].CHINTFLAG.bit.TCMPL = 0x01;
+
 
     adc1_done_intflag = true;
 
@@ -882,10 +913,11 @@ void DMAC_1_Handler(void)
 void DMAC_2_Handler(void)
 {
   
-  if(ML_DMAC_CHANNEL_IS_SUSP(DMAC_EMIT_MODULATOR_TIMER_CHANNEL))
+  if(DMAC->Channel[DMAC_EMIT_MODULATOR_TIMER_CHANNEL].CHINTFLAG.bit.TCMPL)
   {
 
     ML_DMAC_CHANNEL_CLR_SUSP_INTFLAG(DMAC_EMIT_MODULATOR_TIMER_CHANNEL);
+    DMAC->Channel[DMAC_EMIT_MODULATOR_TIMER_CHANNEL].CHINTFLAG.bit.TCMPL = 0x01;
 
     emit_stop_intflag = true;
   }
