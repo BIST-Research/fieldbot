@@ -29,13 +29,13 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
     [rows_s, cols_s] = np.shape(s_cut)
     
     dB = -dB_range
-    for vc in cols_s:
-        vc = [dB if n < dB else n for n in vc]
+    #for vc in cols_s:
+    #    vc = [dB if n < dB else n for n in vc]
     
-    #for col in range(cols_s):
-    #    for row in range(rows_s):
-    #        if s_cut[row][col] < -1*DB_range:
-    #            s_cut[row][col] = -1*DB_range
+    for col in range(cols_s):
+        for row in range(rows_s):
+            if s_cut[row][col] < dB:
+                s_cut[row][col] = dB
                 
     cf = ax.pcolormesh(t, f_cut, s_cut, cmap='jet', shading='auto')
     cbar = fig.colorbar(cf, ax=ax)
@@ -48,15 +48,13 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
     cbar.ax.set_ylabel('dB')
         
     
-def process(raw, N_chirp, spec_settings, pass_through=False, time_offs = 0):
+def process(raw, N_chirp, spec_settings, time_offs = 0):
 
     unraw = [((y << 8) | x) for x, y in zip(raw[::2], raw[1::2])]
     unraw_balanced = unraw - np.mean(unraw)
     
-    pt_cut = unraw_balanced[N_chirp + time_offs:]
-    if pass_through:
-        pt_cut = unraw_balanced
-    remainder = unraw_balanced[:N_chirp + time_offs]
+    pt_cut = unraw_balanced[time_offs:]
+    remainder = unraw_balanced[:time_offs]
     
     Fs, NFFT, noverlap = spec_settings
     spec_tup = mlab.specgram(pt_cut, Fs=Fs, NFFT=NFFT, noverlap=noverlap)
@@ -71,7 +69,7 @@ noverlap = 400
 spec_settings = (Fs, NFFT, noverlap)
 
 
-DB_range = 120
+DB_range = 150
 f_plot_bounds = (20E3, 100E3)
 
 N = 30000
@@ -79,10 +77,10 @@ T = N/Fs
 
 T_chirp = 5E-3
 f0_chirp = 100E3
-f1_chirp = 25E3
+f1_chirp = 30E3
 
 offs_chirp = 2048
-offs_chirp = 512
+gain_chirp = 512
 
 T_record = T - T_chirp
 
@@ -122,7 +120,7 @@ for num in cbias:
 
 # Establish serial
 baud = 115200
-sercom = serial.Serial("/dev/cu.usbmodem14101", baud)
+sercom = serial.Serial("/dev/ttyACM0", baud)
 
 # define opcodes
 OP_AMP_START = 0xfe
@@ -163,10 +161,10 @@ plt.subplots_adjust(left=0.1,
                     wspace=0.4,
                     hspace=0.4)
 
-spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=1000)
+spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=0)
 plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='ear')
 
-spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=1000)
+spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=0)
 plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='no ear')
 
 plt.show(block=True)
