@@ -47,28 +47,30 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
 
     cbar.ax.set_ylabel('dB')
 
-def autocorr(unraw, chirp):
+def autocorr(unraw, chirp, min_dist=None):
+
     xcor = signal.correlate(unraw, chirp, mode='same', method='auto')
-    xcor /= np.max(xcor)
-    xcor = np.abs(xcor)
-    return xcor   
+    xcor = np.abs(xcor)/np.max(xcor)
     
-def plotcorr(xcorr, tvec, ax, plot_title='xcorr'):
-
     primary_height = 0.4
-    peaks, apeaks = signal.find_peaks(xcorr, height=primary_height, prominence=[0.9, 2.0], threshold=0.02)
     
-    Npeak = peaks[0]
-    tpeak = Npeak/Fs
+    peaks, apeaks = signal.find_peaks(
+        xcor, 
+        height=primary_height, 
+        prominence=[0.9, 2.0], 
+        distance = min_dist
+    )
+	
+    return xcor, peaks
+	
     
-
+def plotcorr(xcorr, peaks, ax, plot_title='xcorr', xprange=None):
+    
     ax.plot(xcorr)
     ax.plot(peaks, xcorr[peaks], "x")
     ax.set_ylabel('Amplitude')
     ax.set_xlabel('Time (sec)')
     ax.title.set_text(plot_title)
-    
-
     
      
 def process(raw, N_chirp, spec_settings, time_offs = 0):
@@ -90,7 +92,6 @@ Ts = 1/Fs
 NFFT = 512
 noverlap = 400
 spec_settings = (Fs, NFFT, noverlap)
-
 
 DB_range = 100
 f_plot_bounds = (25E3, 100E3)
@@ -118,7 +119,7 @@ assert T_chirp + T_record == T
 # create chirp time vector
 t0_chirp = 0
 t1_chirp = T_chirp - Ts/2
-tv_chirp = np.arange(0, T_chirp - Ts/2, Ts)
+tv_chirp = np.arange(t0_chirp, t1_chirp, Ts)
 
 # create chirp
 chirp = signal.chirp(tv_chirp, f0_chirp, T_chirp, f1_chirp, method='linear')
@@ -130,7 +131,13 @@ chirp_biased = (np.rint(offs_chirp + gain_chirp*chirp)).astype(int)
 
 cbias = chirp_biased.tolist()
 
-f_chirp = lambda t: f0_chirp + (f1_chirp - f0_chirp) * t / t1_chirp
+ft_chirp = lambda t: f0_chirp + (f1_chirp - f0_chirp) * t / t1_chirp
+fN_chirp = lambda N: ft_chirp(N/Fs)
+
+dist2samples = lambda d: (d/343) * Fs
+
+min_distance = 1
+max_distance = 3
 
 byterr = bytearray()
 for num in cbias:
@@ -207,16 +214,27 @@ plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = D
 
 fig_xcorr, ax_xcorr = plt.subplots(nrows=2, figsize=(9,7), sharex=True)
 
-xcor1 = autocorr(pt_cut1, chirp)
-xcor2 = autocorr(pt_cut2, chirp)
+mindist = 2*dist2samples(min_distance)
+
+xcor1, peaks1 = autocorr(pt_cut1, chirp, min_dist=mindist)
+xcor2, peaks2 = autocorr(pt_cut2, chirp, min_dist=mindist)
+
+fpeak1 = np.round(fN_chirp(peaks1[0]), decimals=-1).astype(np.int64)
+fpeak2 = np.round(fN_chirp(peaks2[0]), decimals=-1).astype(np.int64)
+
+print(f"{fpeak1}, {fpeak2}")
+print(f"{peaks1}, {peaks2}")
 
 xcor_tvec = np.linspace(0, N_remainder/Fs, N_remainder)
 
-plotcorr(xcor1, xcor_tvec, ax_xcorr[0], plot_title='Left')
+plotcorr(xcor1, peaks1, ax_xcorr[0], plot_title='Left')
+plotcorr(xcor2, peaks2, ax_xcorr[1], plot_title='Right')
+
+ax_spec[0].plot(peaks1[0]/Fs, fpeak1, 'x', color='w')
+ax_spec[1].plot(peaks2[0]/Fs, fpeak2, 'x', color='w')
 
 
- 
-plotcorr(xcor2, xcor_tvec, ax_xcorr[1], plot_title='Right')
+
 
 plt.show(block=True)
 
