@@ -153,8 +153,8 @@ for num in cbias:
 #plt.show(block=True)
 
 # Establish serial
-baud = 115200
-sercom = serial.Serial("/dev/sonar", baud)
+#baud = 115200
+#sercom = serial.Serial("/dev/sonar", baud)
 
 # define opcodes
 OP_AMP_START = 0xfe
@@ -169,25 +169,30 @@ DONT_CHIRP = 0x00
 #[print(n) for n in chirp_biased]
 
 # send amp start
-sercom.write([OP_AMP_START])
+#sercom.write([OP_AMP_START])
 
 # Give MCU chirp data
-sercom.write([OP_GET_CHIRP])
-sercom.write(byterr)
+#sercom.write([OP_GET_CHIRP])
+#sercom.write(byterr)
 
 # Flush out ADCs
-sercom.write([OP_START_JOB, DONT_CHIRP])
-sercom.read(2*N)
-sercom.read(2*N)
+#sercom.write([OP_START_JOB, DONT_CHIRP])
+#sercom.read(2*N)
+#sercom.read(2*N)
 
 # send start run, chirp enabled
-sercom.write([OP_START_JOB, DO_CHIRP])
+#sercom.write([OP_START_JOB, DO_CHIRP])
 
 # read and unpack echo data
-raw1 = sercom.read(2 * N)
-raw2 = sercom.read(2 * N)
+#raw1 = sercom.read(2 * N)
+#raw2 = sercom.read(2 * N)
 
-fig_spec, ax_spec = plt.subplots(nrows=2, figsize=(9,7), sharex=True)
+with open('39deg/2024-03-24 17:49:50.063407.npy', 'rb') as fd:
+    raw1 = bytearray(np.load(fd))
+    raw2 = bytearray(np.load(fd))
+
+
+fig_spec, ax_spec = plt.subplots(nrows=2, figsize=(9,7))
 
 plt.subplots_adjust(left=0.1,
                     bottom=0.1,
@@ -201,7 +206,7 @@ plt.subplots_adjust(left=0.1,
 N_adj = N_chirp + 3000
 N_remainder = N - N_adj
 
-spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=N_adj)
+spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
 plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='Left')
 
 #xcor1 = signal.correlate(pt_cut1, chirp, mode='same', method='auto')
@@ -209,10 +214,10 @@ plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = D
 #ax_spec_1[0].plot(vv, pt_cut1)
 #ax_spec_1[2].plot(vv, xcor1)
 
-spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=N_adj)
+spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
 plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='Right')
 
-fig_xcorr, ax_xcorr = plt.subplots(nrows=2, figsize=(9,7), sharex=True)
+fig_xcorr, ax_xcorr = plt.subplots(nrows=2, figsize=(9,7))
 
 mindist = 2*dist2samples(min_distance)
 

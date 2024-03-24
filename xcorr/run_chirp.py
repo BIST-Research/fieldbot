@@ -72,10 +72,10 @@ spec_settings = (Fs, NFFT, noverlap)
 DB_range = 150
 f_plot_bounds = (20E3, 100E3)
 
-N = 30000
+N = 16000
 T = N/Fs
 
-T_chirp = 5E-3
+T_chirp = 3E-3
 f0_chirp = 100E3
 f1_chirp = 30E3
 
@@ -161,10 +161,10 @@ plt.subplots_adjust(left=0.1,
                     wspace=0.4,
                     hspace=0.4)
 
-spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=0)
+spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
 plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='ear')
 
-spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=0)
+spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
 plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='no ear')
 
 plt.show(block=True)
