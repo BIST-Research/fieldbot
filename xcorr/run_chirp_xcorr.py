@@ -18,7 +18,7 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
     s, f, t = spec_tup
     
     lfc = (f >= fmin).argmax()
-    s = 20*np.log(s)
+    s = 20*np.log10(s)
     f_cut = f[lfc:]
     s_cut = s[:][lfc:]
 
@@ -187,7 +187,7 @@ DONT_CHIRP = 0x00
 #raw1 = sercom.read(2 * N)
 #raw2 = sercom.read(2 * N)
 
-with open('39deg/2024-03-24 17:49:50.063407.npy', 'rb') as fd:
+with open('clutter_testing/labnotarget_1m_M2_longcable.npy', 'rb') as fd:
     raw1 = bytearray(np.load(fd))
     raw2 = bytearray(np.load(fd))
 

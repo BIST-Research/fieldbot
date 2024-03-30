@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.mlab as mlab
 import matplotlib.colors as colors
+import sys
 
 from scipy import signal
 from datetime import datetime
@@ -18,7 +19,7 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
     s, f, t = spec_tup
     
     lfc = (f >= fmin).argmax()
-    s = 20*np.log(s)
+    s = 20*np.log10(s)
     f_cut = f[lfc:]
     s_cut = s[:][lfc:]
 
@@ -69,8 +70,8 @@ noverlap = 400
 spec_settings = (Fs, NFFT, noverlap)
 
 
-DB_range = 150
-f_plot_bounds = (20E3, 100E3)
+DB_range = 80
+f_plot_bounds = (30E3, 100E3)
 
 N = 16000
 T = N/Fs
@@ -149,9 +150,16 @@ sercom.read(2*N)
 # send start run, chirp enabled
 sercom.write([OP_START_JOB, DO_CHIRP])
 
+fname = str(sys.argv[1])
+
 # read and unpack echo data
 raw1 = sercom.read(2 * N)
 raw2 = sercom.read(2 * N)
+
+with open(f'clutter_testing/{fname}.npy', 'wb') as fd:
+    np.save(fd, raw1)
+    np.save(fd, raw2)
+
 
 fig_spec, ax_spec = plt.subplots(nrows=2, figsize=(9,7))
 plt.subplots_adjust(left=0.1,
