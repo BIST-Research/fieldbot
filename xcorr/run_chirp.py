@@ -13,7 +13,7 @@ import sys
 from scipy import signal
 from datetime import datetime
 
-def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_title = 'spec'):
+def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 40, plot_title = 'spec'):
     
     fmin, fmax = fbounds
     s, f, t = spec_tup
@@ -48,6 +48,13 @@ def plot_spec(ax, fig, spec_tup, fbounds = (20E3, 100E3), dB_range = 150, plot_t
 
     cbar.ax.set_ylabel('dB')
         
+def plot_sig(ax, fig, sig):
+	t = np.arange(0, len(sig))/Fs
+	cf = ax.plot(t, sig)
+	ax_1[1].set_ylabel('Signal')
+	ax_1[1].set_xlabel('Time (sec)')
+	ax_1[1].set_xlim(0, np.max(t))
+
     
 def process(raw, N_chirp, spec_settings, time_offs = 0):
 
@@ -68,9 +75,9 @@ Ts = 1/Fs
 NFFT = 512
 noverlap = 400
 spec_settings = (Fs, NFFT, noverlap)
+new_plots = 1
 
-
-DB_range = 80
+DB_range = 40
 f_plot_bounds = (30E3, 100E3)
 
 N = 16000
@@ -160,25 +167,53 @@ with open(f'clutter_testing/{fname}.npy', 'wb') as fd:
     np.save(fd, raw1)
     np.save(fd, raw2)
 
+if new_plots == 0: 
+	fig_spec, ax_spec = plt.subplots(nrows=2, figsize=(9,7))
+	plt.subplots_adjust(left=0.1,
+		            bottom=0.1,
+		            right=0.9,
+		            top=0.9,
+		            wspace=0.4,
+		            hspace=0.4)
 
-fig_spec, ax_spec = plt.subplots(nrows=2, figsize=(9,7))
-plt.subplots_adjust(left=0.1,
-                    bottom=0.1,
-                    right=0.9,
-                    top=0.9,
-                    wspace=0.4,
-                    hspace=0.4)
+	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
+	plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='ear')
 
-spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
-plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='ear')
+	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
+	plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='no ear')
 
-spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
-plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='no ear')
+	plt.show(block=True)
+elif new_plots == 1:
+	fig_1, ax_1 = plt.subplots(nrows = 2, figsize = (9, 7))
+	plt.subplots_adjust(left=0.1,
+		            bottom=0.1,
+		            right=0.9,
+		            top=0.9,
+		            wspace=0.4,
+		            hspace=0.4)
+	fig_1.suptitle("With Ear")
+	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
 
-plt.show(block=True)
+
+	plot_spec(ax_1[0], fig_1, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='spectrogram')
+	plot_sig(ax_1[1], fig_1, pt_cut1)
+	
+	fig_2, ax_2 = plt.subplots(nrows = 2, figsize = (9, 7))
+	plt.subplots_adjust(left=0.1,
+		            bottom=0.1,
+		            right=0.9,
+		            top=0.9,
+		            wspace=0.4,
+		            hspace=0.4)
+	fig_2.suptitle("Without Ear")
+	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
 
 
+	plot_spec(ax_2[0], fig_2, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='spectrogram')
+	plot_sig(ax_2[1], fig_2, pt_cut2)
 
+	
+	plt.show(block = True)
                 
                 
 
