@@ -1,146 +1,263 @@
-#
-# Author: Ben Westcott
-# Date created: 10/28/23
-#
+""" bb_gps2
+Brief: this is the gps object used by the batbot, this 
+can use NTRIP for RTK and run baseless.
+Author: Mason Lopez
+Date: 2/7/2024
 
+Documentation on zed fp9: https://cdn.sparkfun.com/assets/f/7/4/3/5/PM-15136.pdf
+
+finding basestations: http://www.rtk2go.com:2101/SNIP::STATUS#single
+
+    """
+from serial import Serial
+from pyubx2 import UBXReader, UBXMessage
+
+# for debugging create logging module
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+# for logging gps points
+import gpxpy
+from gpxpy.gpx import GPXTrackSegment,GPXTrackPoint, GPX
+
+
+from datetime import datetime
+from time import sleep,strftime
+from threading import Thread, Event
+
+import pyrtcm.rtcmmessage
+
+import numpy as np
 from queue import Queue, Empty
-from threading import Event
-from time import sleep
 
-from pygnssutils import VERBOSITY_LOW, VERBOSITY_MEDIUM, GNSSNTRIPClient
-from mlgps import mlgps
-#from gnssapp import GNSSSkeletonApp
+# for NTRIP corrections
+from pygnssutils import GNSSNTRIPClient, VERBOSITY_DEBUG,VERBOSITY_HIGH,VERBOSITY_LOW,VERBOSITY_MEDIUM
+    
+    
+class bb_gps2():
+    def __init__(self, serial: Serial,
+                 ntripuser:str=None,
+                 mountpoint:str="VTTI_SR_RTCM3",
+                 ntripserver:str="RTK2go.com",
+                 ntripport:int=2101,
+                 ntrippassword:str="none",
+                 ) -> None:
+        self.stop_event = Event()
+        self.serial = serial
+        
+        # for ntrip client
+        self.ntripuser=ntripuser
+        self.ntrippassword=ntrippassword
+        self.mountpoint=mountpoint
+        self.ntripport=ntripport
+        self.ntripserver=ntripserver
+        self.ntripclient = GNSSNTRIPClient(verbosity = VERBOSITY_DEBUG,logtofile=True)
+        
+        # ublox message parser
+        self.ubr = UBXReader(self.serial)
+        
+        # tracking points of gps using 
+        self.gpx = GPX()
+        self.gpx.name = "Batbot 7 GPS"
+        self.gpx_segment = GPXTrackSegment()
+        self.gpx.tracks.append(self.gpx_segment)
+        self.gpx_point_count = 0
+        self.gpx_point_save_threshold = 120
+        self.gpx_file_count = 0
 
-import sys
-import bb_log
-import yaml
+        self.run_filename = "unset"
+    
+    
+    def run(self, file_name: str, dir = None):
+        
+        if not self.set_ubx_only_output(True):
+            exit("Failed to set ubx output to only ubx")
+        
+        if not self.set_ubx_only_NAV_PVT(True):
+            exit("Failed to set ubx output to NAT PVT")
+      
+        if not self.set_ubx_rtcm(True):
+            exit("Failed to set ubx RTCM inputs")
+        
+        if not self.set_message_rate(500):
+            exit("Failed to set message rate")
+        
+        logging.debug("Success setting UBX parameters")
+        print("Success setting UBX parameters")
+        
+        self.run_filename = file_name
 
-CONNECTED = 1
+        # corrections for creating 
+        ntrip_corrections = Queue()
+        using_ntrip = False
+        
+        if self.ntripuser is not None:
+            logging.debug(f"Trying NTRIP connection on mountpoint: {self.mountpoint}, user: {self.ntripuser}")
+            self.ntripclient.run(
+                server=self.ntripserver, 
+                port=self.ntripport, 
+                mountpoint=self.mountpoint, 
+                ntripuser=self.ntripuser, 
+                ntrippassword=self.ntrippassword,
+                logtofile=True,
+                verbosity = VERBOSITY_DEBUG,
+                output=ntrip_corrections)
+            
+            
+                # if not ntrip_corrections.empty():
+            try:
+                msg = ntrip_corrections.get(timeout=2)
+                if msg and isinstance(msg[1],pyrtcm.RTCMMessage):
+                    logging.debug(f"Success connecting to mountpoint: {self.mountpoint}")
+                    using_ntrip = True
+            except Empty:
+                logging.error(f"Failed to connect to mountpoint: {self.mountpoint}")
+                
+    
+        else:
+            logging.debug("No NTRIP mountpoint given, running without RTCM")
+            
+        
+        # loop where data is collected, saved and RTCM is sent
+        while not self.stop_event.is_set():
+            
+            # if we get NTRIP corrections send it 
+            if not ntrip_corrections.empty():
+                msg = ntrip_corrections.get()
+                raw,_ = msg
+                self.serial.write(raw)
+                print("Sent NTRIP Corrections")
 
-def get_gps_exec_line(gps_book, run_dir):
-    ntrip_book = gps_book['ntrip']
-    exec_line = [
-        "py3",
-        "bb_gps.py",
-        f"{gps_book['ser_port']}",
-        f"{gps_book['baud_rate']}",
-        f"{gps_book['timeout']}",
-        f"{ntrip_book['ipprot']}",
-        f"{ntrip_book['server']}",
-        f"{ntrip_book['port']}",
-        f"{ntrip_book['username']}",
-        f"{ntrip_book['password']}",
-        f"{ntrip_book['ggamode']}",
-        f"{ntrip_book['ggaint']}",
-        f"{ntrip_book['reflat']}",
-        f"{ntrip_book['reflon']}",
-        f"{ntrip_book['refalt']}",
-        f"{ntrip_book['refsep']}",
-        f"{run_dir}"
-    ]
-    return exec_line
+            # poll serial for messages
+            (_,msg) = self.ubr.read()
+            if msg:
+                time = datetime(msg.year,msg.month,msg.day,msg.hour,msg.min,msg.second)
+                print(f"lat: {msg.lat} long: {msg.lon} identity: {msg.identity} time { time.strftime('%Y%m%d_%H%M%S') }")
+                track_point = GPXTrackPoint(latitude=msg.lat,
+                                            longitude=msg.lon,
+                                            elevation=msg.hMSL/100,
+                                            time=time,
+                                            position_dilution=msg.pDOP)
+                
+                self.gpx_segment.points.append(track_point)
 
+                self.save_gpx_data()
+
+        self.save_gpx_data()
+            
+    def save_gpx_data(self)->None:
+        if self.gpx_point_count >= self.gpx_point_save_threshold or self.stop_event.is_set():
+            xml = self.gpx.to_xml()
+            filename = self.run_filename+"_GPS_"+strftime("%Y%m%d_%H%M%S")+"_part"+str(self.gpx_file_count)+".gpx"
+            
+            with open(filename,"w") as file:
+                file.write(xml)
+
+            self.gpx_file_count+=1
+            self.gpx_point_count = 0
+
+            # reset the segment
+            self.gpx = GPX()
+            self.gpx.name = "BatBot 7"
+            self.gpx.description = "GPS data using zed f9p"
+
+            self.gpx_segment = GPXTrackSegment()
+
+        self.gpx_point_count+=1
+        
+    
+        
+    def stop(self):
+        self.stop_event.set()
+        logging.debug("Stopping gps collections")
+    
+    
+    def set_message_rate(self,refresh_rate_ms:np.uint16)->bool:
+        cfg_data = []
+        
+        cfg_data.append(("CFG_RATE_MEAS", refresh_rate_ms))
+        
+        msg = UBXMessage.config_set(1,0,cfg_data)
+        
+        self.serial.write(msg.serialize())
+        self.serial.flush()
+        return self.check_for_ubx_ack(f"CFG_RATE_MEAS {refresh_rate_ms}ms")
+    
+    def set_ubx_only_output(self,enable:bool)->bool:
+        cfg_data = []
+        
+        cfg_data.append(("CFG_USBOUTPROT_NMEA", not enable))
+        cfg_data.append(("CFG_USBOUTPROT_UBX", enable))
+        cfg_data.append(("CFG_USBOUTPROT_RTCM3X", enable))
+        
+        msg = UBXMessage.config_set(1,0,cfg_data)
+        
+        self.serial.write(msg.serialize())
+        self.serial.flush()
+        return self.check_for_ubx_ack(f"CFG_USBOUTPROT_NMEA {not enable},CFG_USBOUTPROT_UBX {enable}")
+    
+    def set_ubx_only_NAV_PVT(self,enable:bool)->bool:
+        cfg_data = []
+        
+        cfg_data.append(("CFG_MSGOUT_UBX_NAV_PVT_USB",enable))
+        msg = UBXMessage.config_set(1,0,cfg_data)
+        
+        self.serial.write(msg.serialize())
+        self.serial.flush()
+        return self.check_for_ubx_ack(f"CFG_MSGOUT_UBX_NAV_PVT_USB {enable}")
+    
+    def set_ubx_rtcm(self,enable:bool)->bool:
+        cfg_data = []
+        
+        cfg_data.append(("CFG_USBINPROT_RTCM3X",enable))
+        cfg_data.append(("CFG_USBOUTPROT_RTCM3X",enable))
+        msg = UBXMessage.config_set(1,0,cfg_data)
+        
+        self.serial.write(msg.serialize())
+        self.serial.flush()
+        return self.check_for_ubx_ack(f"CFG_USBINPROT_RTCM3X {enable}")
+    
+
+    
+    def check_for_ubx_ack(self, msg_to_ack:str)->bool:
+        for i in range(5):
+            _,msg = self.ubr.read()
+            if not msg or not hasattr(msg,"identity"):
+                continue
+            if msg.identity == "ACK-ACK":
+                logging.debug(f"Success: UBX ACK'D '{msg_to_ack}'")
+                return True
+            elif msg.identity == "ACK-NACK":
+                logging.debug(f"Error: UBX NACK'D '{msg_to_ack}'")
+                return False
+                
+        logging.debug(f"Error: UBX did not ACK or NACK: '{msg_to_ack}'")
+        return False
+    
+        
+    
+    
 if __name__ == "__main__":
     
-    batlog = bb_log.get_log()
-        
-    ser_port = str(sys.argv[1])
-    baud_rate = str(sys.argv[2])
-    timeout = int(sys.argv[3])
-    #do_rtk = bool(sys.argv[4])
-    ntrip_ipprot = str(sys.argv[4])
-    ntrip_server = str(sys.argv[5])
-    ntrip_port = int(sys.argv[6])
-    ntrip_mountpoint = ""
-    ntrip_username = str(sys.argv[7])
-    ntrip_password = str(sys.argv[8])
-    ntrip_ggamode = int(sys.argv[9])
-    ntrip_ggint = int(sys.argv[10])
-    ntrip_reflat = float(sys.argv[11])
-    ntrip_reflon = float(sys.argv[12])
-    ntrip_refalt = float(sys.argv[13])
-    ntrip_refsep = float(sys.argv[14])
-    run_dir = str(sys.argv[15])
-
-    send_queue = Queue()
-    sourcetable_queue = Queue()
-    stop_event = Event()
+    print("Starting batbot gps ")
     
-    try:
-        stdout_fd = open(f"{run_dir}/gps_stdout.log", "w")
-        stdout_fd.write(f"Starting GNSS reader/writer on {ser_port} @ {baud_rate}...\n")
+    gps = bb_gps2(Serial('/dev/ttyACM1', 9600, timeout=3),
+                  ntripuser="masonlopez@vt.com")
+    
+    # gps.run("experiment1")
+    gps_thread = Thread(target=gps.run,args=("Experiments1",None))
 
 
-        with mlgps(
-           ser_port,
-           baud_rate,
-           timeout,
-           dump_path=run_dir,
-           stopevent=stop_event,
-           sendqueue=send_queue,
-           ubxenable=True,
-           bat_log = batlog
-           
-        ) as gna:
-            gna.run()
-            sleep(2)
-            
-            mountpoint = ""
-            stdout_fd.write(f"Retrieving closest mountpoint from {ntrip_server}:{ntrip_port}...\n")
-
-            with GNSSNTRIPClient(gna, verbosity=VERBOSITY_LOW) as gnc:
-                streaming = gnc.run(
-                    ipprot=ntrip_ipprot,
-                    server=ntrip_server,
-                    port=ntrip_port,
-                    mountpoint=ntrip_mountpoint,
-                    ntripuser=ntrip_username,
-                    ntrippassword=ntrip_password,
-                    reflat=ntrip_reflat,
-                    reflon=ntrip_reflon,
-                    refalt=ntrip_refalt,
-                    refsep=ntrip_refsep,
-                    ggamode=ntrip_ggamode,
-                    ggainterval=ntrip_ggint,
-                    output=sourcetable_queue
-                )
-                
-                try:
-                    srt, (mountpoint, dist) = sourcetable_queue.get(timeout=3)
-                    #print(f"{srt}\n\n")
-                    if mountpoint is None:
-                        raise Empty
-                        
-                    stdout_fd.write(f"Closest mountpoint is {mountpoint} which is {dist} km away\n")
-
-                except Empty:
-                    stop_event.set()
-                    stdout_fd.write("Unable to find closest mountpoint -- quitting...\n")
-
-            
-            ntrip_address = f"{ntrip_server}:{ntrip_port}/{mountpoint}"
-            stdout_fd.write(f"Streaming RTCM3 data from {ntrip_address}...\n")
-
-            with GNSSNTRIPClient(gna, verbosity=VERBOSITY_MEDIUM, logtofile=1, logpath=run_dir) as gnc:
-                streaming = gnc.run(
-                    server=ntrip_server,
-                    port=ntrip_port,
-                    mountpoint=mountpoint,
-                    ntripuser=ntrip_username,
-                    ntrippassword=ntrip_password,
-                    output=send_queue
-                )
+    gps_thread.start()
 
 
-                while(
-                    streaming and not stop_event.is_set()
-                ):
-                    sleep(1)
-                sleep(1)
-                stdout_fd.close()
-                
-    except KeyboardInterrupt:
-        stop_event.set()
-        #stdout_fd.write("Terminated by user")
-       
+    msg = input("press any key to stop \n\n")
+    print("Ending collections")
+
+    gps.stop_event.set()
+
+        
+    
+    
+
 
