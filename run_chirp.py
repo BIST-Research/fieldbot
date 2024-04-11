@@ -85,8 +85,10 @@ f_plot_bounds = (30E3, 100E3)
 
 N = 16000
 T = N/Fs
-
 T_chirp = 3E-3
+time_offset = round(T_chirp*10E5 + 200)
+print(T_chirp*1000)
+print(time_offset)
 f0_chirp = 100E3
 f1_chirp = 30E3
 
@@ -179,10 +181,10 @@ if new_plots == 0:
 		            wspace=0.4,
 		            hspace=0.4)
 
-	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
+	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=time_offset)
 	plot_spec(ax_spec[0], fig_spec, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='ear')
 
-	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
+	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=time_offset)
 	plot_spec(ax_spec[1], fig_spec, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='no ear')
 
 	plt.show(block=True)
@@ -195,7 +197,7 @@ elif new_plots == 1:
 		            wspace=0.4,
 		            hspace=0.4)
 	fig_1.suptitle("With Ear")
-	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=5200)
+	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=time_offset)
 
 
 	plot_spec(ax_1[0], fig_1, spec_tup1, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='spectrogram')
@@ -209,7 +211,7 @@ elif new_plots == 1:
 		            wspace=0.4,
 		            hspace=0.4)
 	fig_2.suptitle("Without Ear")
-	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=5200)
+	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=time_offset)
 
 
 	plot_spec(ax_2[0], fig_2, spec_tup2, fbounds = f_plot_bounds, dB_range = DB_range, plot_title='spectrogram')
