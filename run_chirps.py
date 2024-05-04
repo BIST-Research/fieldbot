@@ -111,8 +111,8 @@ sercom.read(2*N)
 
 folder_name = str(sys.argv[1])
 nruns = int(sys.argv[2])
-save_folder = "elevation_testing/black_poster/" + folder_name
-print(str(nruns) + " runs saved in folder " + folder_name)
+save_folder = "data/" + folder_name
+
 
 if not os.path.exists(save_folder):
 	os.mkdir(save_folder)
@@ -128,11 +128,14 @@ for n in range(nruns):
     #unraw1 = unpack(raw1)
     #unraw2 = unpack(raw2)
     
+    if n % 100 == 0:
+	    print(f"{n}/{nruns}\n")
+    
     with open((save_folder +  "/" + f'{get_timestamp_now()}.npy'), 'wb') as fd:
         np.save(fd, raw1)
         np.save(fd, raw2)
         
-    
+print(str(nruns) + " runs saved in folder " + folder_name)
     
     
     

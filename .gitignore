@@ -3,3 +3,7 @@ force_m4/.DS_Store
 .DS_Store
 data_dst/
 __pycache__/
+data
+data/*
+gps_data
+gps_data/*

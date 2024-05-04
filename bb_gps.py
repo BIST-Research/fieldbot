@@ -130,13 +130,15 @@ class bb_gps2():
 
             # poll serial for messages
             (_,msg) = self.ubr.read()
-            if msg:
-                time = datetime(msg.year,msg.month,msg.day,msg.hour,msg.min,msg.second)
-                print(f"lat: {msg.lat} long: {msg.lon} identity: {msg.identity} time { time.strftime('%Y%m%d_%H%M%S') }")
+            if hasattr(msg,'lat'):
+                #time = datetime(msg.year,msg.month,msg.day,msg.hour,msg.min,msg.second)
+                
+               # print(f"lat: {msg.lat} long: {msg.lon} identity: {msg.identity} time { time.strftime('%Y%m%d_%H%M%S') }")
+                print(f"lat: {msg.lat} long: {msg.lon} identity: {msg.identity} time")
                 track_point = GPXTrackPoint(latitude=msg.lat,
                                             longitude=msg.lon,
                                             elevation=msg.hMSL/100,
-                                            time=time,
+                                            #time=time,
                                             position_dilution=msg.pDOP)
                 
                 self.gpx_segment.points.append(track_point)
@@ -241,20 +243,20 @@ if __name__ == "__main__":
     
     print("Starting batbot gps ")
     
-    gps = bb_gps2(Serial('/dev/ttyACM1', 9600, timeout=3),
-                  ntripuser="masonlopez@vt.com")
+    gps = bb_gps2(Serial('/dev/gps', 9600, timeout=3),
+                  ntripuser="bats",mountpoint="", ntripserver="192.168.8.221", ntripport=50012, ntrippassword="bats")
     
-    # gps.run("experiment1")
-    gps_thread = Thread(target=gps.run,args=("Experiments1",None))
+    gps.run("experiment1")
+    #gps_thread = Thread(target=gps.run,args=("Experiments1",None))
 
 
-    gps_thread.start()
+    #gps_thread.start()
 
 
     msg = input("press any key to stop \n\n")
     print("Ending collections")
 
-    gps.stop_event.set()
+    #gps.stop_event.set()
 
         
     

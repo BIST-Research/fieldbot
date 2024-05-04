@@ -71,6 +71,21 @@ def process(raw, N_chirp, spec_settings, time_offs = 0):
     return spec_tup, pt_cut, remainder
     
 
+fname = str(sys.argv[1])
+toffset = int(sys.argv[2])
+fbl = int(sys.argv[3])
+fbh = int(sys.argv[4])
+
+if toffset < 0:
+    time_offset = 4000
+else:
+    time_offset = toffset
+    
+if fbl < 0 or fbh < 0:
+    f_plot_bounds = (30E3, 100E3)
+else:
+    f_plot_bounds = (fbl, fbh)
+
 Fs = 1E6
 Ts = 1/Fs
 NFFT = 512
@@ -81,14 +96,15 @@ spec_settings = (Fs, NFFT, noverlap, window)
 new_plots = 1
 
 DB_range = 40
-f_plot_bounds = (30E3, 100E3)
+#f_plot_bounds = (30E3, 100E3)
 
 N = 16000
 T = N/Fs
 T_chirp = 3E-3
-time_offset = round(T_chirp*10E5 + 200)
-print(T_chirp*1000)
-print(time_offset)
+#time_offset = round(T_chirp*10E5 + 200)
+#print(T_chirp*1000)
+#time_offset=4000
+#print(time_offset)
 f0_chirp = 100E3
 f1_chirp = 30E3
 
@@ -162,13 +178,13 @@ sercom.read(2*N)
 # send start run, chirp enabled
 sercom.write([OP_START_JOB, DO_CHIRP])
 
-fname = str(sys.argv[1])
+
 
 # read and unpack echo data
 raw1 = sercom.read(2 * N)
 raw2 = sercom.read(2 * N)
 
-with open(f'elevation_testing/black_poster/{fname}.npy', 'wb') as fd:
+with open(f'data/{fname}.npy', 'wb') as fd:
     np.save(fd, raw1)
     np.save(fd, raw2)
 

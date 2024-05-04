@@ -121,17 +121,19 @@ spec_settings = (Fs, NFFT, noverlap)
 
 
 DB_range = 40
-f_plot_bounds = (25E3, 100E3)
+f_plot_bounds = (30E3, 100E3)
 
 
-N = 30000
+N = 16000
 T = N/Fs
 
 
 T_chirp = 3E-3
 f0_chirp = 100E3
 f1_chirp = 30E3
-time_offset = int(T_chirp*10E5 + 2000)
+#time_offset = int(T_chirp*10E5 + 500)
+time_offset = 8000
+#time_offset = 0
 offs_chirp = 2048
 gain_chirp = 512
 
