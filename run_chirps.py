@@ -1,36 +1,79 @@
+#Import what needed 
+# numpy, refers to Numerical Python, is imported in order to deal with arrays, matrices, and collection of functions
 import numpy as np
+
+# pyserial
+#This allows to open, read, and write to serial ports 
+#With this I can configure parameters such as baud rate, parity, stop bits to match the specifications of the devices we use
 import serial
+
+# it allows us to get port information and list which ports are available
 import serial.tools.list_ports
+
+# this provides various functions related to time
 import time
+
+# this allow us to use mathematical built-in functions
 import math
+
+# this allow users to use built-in os module 
+# this module allows users to manipulate file, directory, and system. 
 import os
+
+# required for creation and customization of plots
 import matplotlib.pyplot as plt
-import numpy as np
+
+#import numpy as np
+
+# shroten the names of modules for easier use
 import matplotlib.mlab as mlab
 import matplotlib.colors as colors
+
+# required to handle command-line arguments and environment
 import sys
 
+# this tool is required to process signals in python, such as filtering, analyzing, and manipulating signals
 from scipy import signal
+
+# required to work with date and time
 from datetime import datetime
 
+# obtain current timestamp, it is useful for logging things and other operations related to time.
 from bb_utils import get_timestamp_now
 
+# Frequency 1MHz
 Fs = 1E6
+
+#Time: Time = Frequency^-1
 Ts = 1/Fs
+
+# Number of points used in FFT (Fast Fourier Transform)
 NFFT = 512
+
+# Number of overlaps
 noverlap = 400
+
+# Create a Tuple that contains Fs, NFFT, and noverlap
 spec_settings = (Fs, NFFT, noverlap)
 
+# Set Database Range = 100 
 DB_range = 100
+
+# Tuple that holds bounds for plot 
 f_plot_bounds = (25E3, 100E3)
 
+# N is the number of I divide the frequency
 N = 16000
+
+# T = Period 
 T = N/Fs
 
+# Period of chirp
 T_chirp = 3E-3
 f0_chirp = 100E3
 f1_chirp = 30E3
 
+# Offset for chirp
 offs_chirp = 2048
 gain_chirp = 512
 
@@ -83,7 +126,7 @@ for num in cbias:
 
 # Establish serial
 baud = 115200
-sercom = serial.Serial("/dev/sonar", baud)
+sercom = serial.Serial("COM8", baud)
 
 # define opcodes
 OP_AMP_START = 0xfe
@@ -109,7 +152,7 @@ sercom.write([OP_START_JOB, DONT_CHIRP])
 sercom.read(2*N)
 sercom.read(2*N)
 
-folder_name = str(sys.argv[1])
+folder_name = str(sys.argv[1]) 
 nruns = int(sys.argv[2])
 save_folder = "data/" + folder_name
 
