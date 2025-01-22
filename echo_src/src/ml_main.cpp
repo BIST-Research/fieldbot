@@ -3,49 +3,58 @@
  * Date created: 8/10/22
  */
 
-#include <ml_clocks.h>
-#include <ml_port.h>
-#include <ml_tcc_common.h>
-#include <ml_tc_common.h>
-#include <ml_dmac.h>
-#include <ml_adc_common.h>
-#include <ml_adc0.h>
-#include <ml_adc1.h>
-#include <ml_dac_common.h>
-#include <ml_dac0.h>
+
+#include <ml_clocks.h> // Header file for clock management
+#include <ml_port.h> // Header file for port configurations
+#include <ml_tcc_common.h> // Header file for Timer/Counter Control (TCC) common functionality
+#include <ml_tc_common.h> // Header file for basic Timer/Counter functionality
+#include <ml_dmac.h> // Header file for Direct Memory Access Controller (DMAC - transfers data to the memory without using cpu for more effecient transfer)
+#include <ml_adc_common.h> // Header for common ADC functions
+#include <ml_adc0.h> // Header for ADC0 specific functionality (Mic 1)
+#include <ml_adc1.h> // Header for ADC1 specific functionality (Mic 2)
+#include <ml_dac_common.h> // Header for common DAC functions
+#include <ml_dac0.h> // Header for DAC0 specific functionality (creates speaker signal)
 
 //#define N_1ADC
 
-#define N_ADC_SAMPLES 16000
-#define N_DAC_TIMER 160
-#define N_DAC_SAMPLES 3000
-#define N_WAIT_TIMER 2
+#define N_ADC_SAMPLES 16000 // Number of samples collected by ADC, length of recorded mic signals
+#define N_DAC_TIMER 160 // Timer value for DAC operations (unsure what it does??????)
+#define N_DAC_SAMPLES 1200 // Number of samples to output from DAC, length of signal sent to speakers
+#define N_WAIT_TIMER 2 // Wait timer period
 
-static uint16_t chirp_out_buffer[N_DAC_SAMPLES];
+static uint16_t chirp_out_buffer[N_DAC_SAMPLES]; // Buffer to hold DAC ouptut
 
+char recv[2 * N_DAC_SAMPLES]; // Took this out of the get_chirp function so it's allocated in the RAM initally rather than on the stack later
+// basically, you will see the ram failure on upload rather than freezing later
+
+// Initializes the chirp output buffer with zeros
 uint32_t init_chirp_buffer(void)
 {
-  bzero((void *)chirp_out_buffer, sizeof(uint16_t) * N_DAC_SAMPLES);
-  return (uint32_t)&chirp_out_buffer[0] + N_DAC_SAMPLES * sizeof(uint16_t);
+  bzero((void *)chirp_out_buffer, sizeof(uint16_t) * N_DAC_SAMPLES); // set all values in the buffer to zero
+  return (uint32_t)&chirp_out_buffer[0] + N_DAC_SAMPLES * sizeof(uint16_t); // Return the address of the buffer
 }
 
 // DMAC looks for the base descriptor when serving a request
-static DmacDescriptor base_descriptor[3] __attribute__((aligned(16)));
-static volatile DmacDescriptor wb_descriptor[3] __attribute__((aligned(16)));
+static DmacDescriptor base_descriptor[3] __attribute__((aligned(16))); // Define descriptors for DMA transfers
+static volatile DmacDescriptor wb_descriptor[3] __attribute__((aligned(16))); // Write-back descriptors (used for monitoring ongoing transfers)
 
-const uint32_t chirp_out_dmac_channel_settings = DMAC_CHCTRLA_BURSTLEN_SINGLE | //check when testing evsys
-                                                 DMAC_CHCTRLA_TRIGACT_BURST |
-                                                 //DMAC_CHCTRLA_TRIGSRC(DAC_DMAC_ID_EMPTY_0);
-                                                 DMAC_CHCTRLA_TRIGSRC(TCC0_DMAC_ID_OVF);
+// Configuration for DMAC channel handling chirp output
+const uint32_t chirp_out_dmac_channel_settings = DMAC_CHCTRLA_BURSTLEN_SINGLE | //check when testing evsys, single transfer per trigger
+                                                 DMAC_CHCTRLA_TRIGACT_BURST | // Perform burst action per trigger
+                                                 //DMAC_CHCTRLA_TRIGSRC(DAC_DMAC_ID_EMPTY_0); 
+                                                 DMAC_CHCTRLA_TRIGSRC(TCC0_DMAC_ID_OVF); // Trigger on TCC0 overflow event
+// Note: The line above links the DMAC to the timer TCC0, which the DMA transfers the DAC output
 
-const uint16_t chirp_out_dmac_descriptor_settings = DMAC_BTCTRL_VALID |
+// Settings for DMAC descriptor related to chirp output
+const uint16_t chirp_out_dmac_descriptor_settings = DMAC_BTCTRL_VALID | // Marks descriptor as valid
                                            //         DMAC_BTCTRL_EVOSEL_BURST | //check when testing evsys
-                                                    DMAC_BTCTRL_BLOCKACT_BOTH | //check when testing evsys
-                                                    DMAC_BTCTRL_BEATSIZE_HWORD |
-                                                    DMAC_BTCTRL_SRCINC;
+                                                    DMAC_BTCTRL_BLOCKACT_BOTH | //check when testing evsys, perform action at start and end of block
+                                                    DMAC_BTCTRL_BEATSIZE_HWORD | // Half-word size beats
+                                                    DMAC_BTCTRL_SRCINC; // Source address incremented after each transfer
 
-uint32_t chirp_out_source_address;
+uint32_t chirp_out_source_address; // Holds the source address for chirp output DMA
 
+// Define pin settings for peripherals
 const ml_pin_settings dac_sample_timer_pin = {PORT_GRP_A, 21, PF_G, PP_ODD, OUTPUT_PULL_DOWN, DRIVE_OFF};
 const ml_pin_settings wait_timer_pin = {PORT_GRP_A, 14, PF_F, PP_EVEN, OUTPUT_PULL_DOWN, DRIVE_OFF};
 const ml_pin_settings state_timer_pin = {PORT_GRP_A, 16, PF_E, PP_EVEN, OUTPUT_PULL_DOWN, DRIVE_OFF};
@@ -53,22 +62,23 @@ const ml_pin_settings dac_pin = {PORT_GRP_A, 2, PF_B, PP_EVEN, ANALOG, DRIVE_ON}
 const ml_pin_settings adc0_pin = {PORT_GRP_B, 9, PF_B, PP_ODD, ANALOG, DRIVE_OFF};
 const ml_pin_settings adc1_pin = {PORT_GRP_B, 8, PF_B, PP_EVEN, ANALOG, DRIVE_OFF};
 
+// Initializes DAC sample timer with specified settings
 void dac_sample_timer_init(void)
 {
-  TCC_disable(TCC0);
-  TCC_swrst(TCC0);
+  TCC_disable(TCC0); // Disable TCC0 before configuration
+  TCC_swrst(TCC0); // Reset TCC0 to ensure a clean slate
 
   TCC0->CTRLA.reg = 
   (
     //  TCC_CTRLA_PRESCALER_DIV2 |
-      TCC_CTRLA_PRESCSYNC_PRESC
+      TCC_CTRLA_PRESCSYNC_PRESC // Configure prescalar synchronization
   );
 
-  TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ;
+  TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ; // Set normal frequency wave generation mode
 
-  // 12 MHz / (2 * 6) = 1 MHz
-  TCC_set_period(TCC0, 11);
-  TCC_channel_capture_compare_set(TCC0, 1, 3);
+  // 12 MHz / (Period + 1) = DAC Sample Rate
+  TCC_set_period(TCC0, 29); // Set timer period to achieve desired frequency
+  TCC_channel_capture_compare_set(TCC0, 1, 3); // Set compare value for {WM}
 
   //peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
 
@@ -525,7 +535,6 @@ void loop(void)
     else if (opcode == GET_CHIRP)
     {
 
-      char recv[2 * N_DAC_SAMPLES];
       Serial.readBytes(recv, 2 * N_DAC_SAMPLES);
 
       uint16_t *buf = reinterpret_cast<uint16_t *>(&recv[0]);
