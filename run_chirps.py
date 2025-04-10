@@ -24,7 +24,7 @@ spec_settings = (Fs, NFFT, noverlap)
 DB_range = 100
 f_plot_bounds = (25E3, 100E3)
 
-N = 16000
+N = 4000
 T = N/Fs
 
 T_chirp = 3E-3
@@ -133,7 +133,7 @@ for n in range(nruns):
     
     with open((save_folder +  "/" + f'{get_timestamp_now()}.npy'), 'wb') as fd:
         np.save(fd, raw1)
-        np.save(fd, raw2)
+        # np.save(fd, raw2)
         
 print(str(nruns) + " runs saved in folder " + folder_name)
     

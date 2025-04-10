@@ -19,9 +19,9 @@ void ADC1_init(void)
     ADC1_FUSES_BIASR2R(r2r)
   );*/
 
-  ADC1->CTRLA.reg |= ADC_CTRLA_PRESCALER_DIV16;
+  ADC1->CTRLA.reg |= ADC_CTRLA_PRESCALER_DIV8;
 
-  ADC1->SAMPCTRL.reg |= ADC_SAMPCTRL_SAMPLEN(7U - 1);
+  ADC1->SAMPCTRL.reg |= ADC_SAMPCTRL_SAMPLEN(3U - 1);
   while(ADC1->SYNCBUSY.bit.SAMPCTRL)
   {
     /* Wait for sync */

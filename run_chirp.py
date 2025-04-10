@@ -91,10 +91,11 @@ else:
 # DAC: 1 MHz
 # ADC: 1.071 MHz 
 TCC_set_period = 29
-#Fs_DAC = 12E6/(TCC_set_period + 1) # Hz
-Fs_DAC = 400E3 # Hz, NOTE: when you change Fs_DAC you also need to change N_DAC_SAMPLES in ml_main.cpp as it = Fs_DAC*T_chirp
+Fs_DAC = 12E6/(TCC_set_period + 1) # Hz
+#Fs_DAC = 400E3 # Hz, NOTE: when you change Fs_DAC you also need to change N_DAC_SAMPLES in ml_main.cpp as it = Fs_DAC*T_chirp
 # NOTE: also probably going to run into some more issues when you don't end up with whole numbers here, probably should rewrite the code to focus around N_chirp more than T_chirp or at least think about it more
 print(Fs_DAC)
+
 sample_len = 6
 prescaler = 16
 time_to_convert_12bit = 13 # from diagram 45-3 in the ATSAMD51G19A data sheet
@@ -102,8 +103,8 @@ Fs_main_clock = 120E6
 Fs_ADC = Fs_main_clock/prescaler/(time_to_convert_12bit+sample_len) # Hz
 print(Fs_ADC)
 Ts_DAC = 1/Fs_DAC
-NFFT = 512
-noverlap = 400 # CHANGE - convert overlap to a percent
+NFFT = 256
+noverlap = int(0.6*NFFT) # CHANGE - convert overlap to a percent
 #window = signal.windows.kaiser(NFFT, beta = 0.1)
 window = signal.windows.hann(NFFT)
 spec_settings = (Fs_ADC, NFFT, noverlap, window)
@@ -112,15 +113,15 @@ new_plots = 1
 DB_range = 110 # dB
 #f_plot_bounds = (30E3, 100E3)
 
-N = 16000 # samples, listening time
+N = 4000 # samples, listening time
 T_listen = N/Fs_ADC
 T_chirp = 3E-3 # ms, chirping time
 #time_offset = round(T_chirp*10E5 + 200)
 #print(T_chirp*1000)
 #time_offset=4000
 #print(time_offset)
-f0_chirp = 50E3
-f1_chirp = 50E3
+f0_chirp = 100E3
+f1_chirp = 30E3
 
 offs_chirp = 2048
 gain_chirp = 512
@@ -151,7 +152,7 @@ cbias = chirp_biased.tolist()
 
 byterr = bytearray()
 for num in cbias:
-    b = num.to_bytes(2)
+    b = num.to_bytes(2, 'big')
     byterr.append(b[1])
     byterr.append(b[0])
         
@@ -231,7 +232,7 @@ elif new_plots == 1:
 		            top=0.9,
 		            wspace=0.4,
 		            hspace=0.4)
-	fig_1.suptitle("With Ear")
+	fig_1.suptitle("Line 1")
 	spec_tup1, pt_cut1, pt1 = process(raw1, N_chirp, spec_settings, time_offs=time_offset)
 
 
@@ -245,7 +246,7 @@ elif new_plots == 1:
 		            top=0.9,
 		            wspace=0.4,
 		            hspace=0.4)
-	fig_2.suptitle("Without Ear")
+	fig_2.suptitle("Line 2")
 	spec_tup2, pt_cut2, pt2 = process(raw2, N_chirp, spec_settings, time_offs=time_offset)
 
 

@@ -17,9 +17,9 @@
 
 //#define N_1ADC
 
-#define N_ADC_SAMPLES 16000 // Number of samples collected by ADC, length of recorded mic signals
+#define N_ADC_SAMPLES 10000 // Number of samples collected by ADC, length of recorded mic signals
 #define N_DAC_TIMER 160 // Timer value for DAC operations (unsure what it does??????)
-#define N_DAC_SAMPLES 1200 // Number of samples to output from DAC, length of signal sent to speakers
+#define N_DAC_SAMPLES 7200 // Number of samples to output from DAC, length of signal sent to speakers
 #define N_WAIT_TIMER 2 // Wait timer period
 
 static uint16_t chirp_out_buffer[N_DAC_SAMPLES]; // Buffer to hold DAC ouptut
@@ -77,7 +77,7 @@ void dac_sample_timer_init(void)
   TCC0->WAVE.reg = TCC_WAVE_WAVEGEN_NFRQ; // Set normal frequency wave generation mode
 
   // 12 MHz / (Period + 1) = DAC Sample Rate
-  TCC_set_period(TCC0, 29); // Set timer period to achieve desired frequency
+  TCC_set_period(TCC0, 4); // Set timer period to achieve desired frequency
   TCC_channel_capture_compare_set(TCC0, 1, 3); // Set compare value for {WM}
 
   //peripheral_port_init(PORT_PMUX_PMUXE(PF_E), 7, OUTPUT_PULL_DOWN, DRIVE_ON);
