@@ -250,10 +250,10 @@ def main():
     window = Spectrogram(fname, offset, fbl, fbh, dB_range)
     window.show()
     
-    # Timer
+    # Timer 
     timer = QtCore.QTimer()
     timer.timeout.connect(window.upd)
-    timer.start(20)
+    timer.start(20  )
     
     app.exec_()
 
