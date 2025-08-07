@@ -83,7 +83,7 @@ for num in cbias:
 
 # Establish serial
 baud = 115200
-sercom = serial.Serial("/dev/sonar", baud)
+sercom = serial.Serial("COM5", baud)
 
 # define opcodes
 OP_AMP_START = 0xfe
@@ -129,11 +129,12 @@ for n in range(nruns):
     #unraw2 = unpack(raw2)
     
     if n % 100 == 0:
-	    print(f"{n}/{nruns}\n")
+        print(f"{n}/{nruns}\n")
     
     with open((save_folder +  "/" + f'{get_timestamp_now()}.npy'), 'wb') as fd:
         np.save(fd, raw1)
         np.save(fd, raw2)
+
         
 print(str(nruns) + " runs saved in folder " + folder_name)
     
