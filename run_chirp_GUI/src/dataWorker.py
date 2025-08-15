@@ -30,19 +30,15 @@ class DataWorker(threading.Thread):
                 time.sleep(0.01)
 
     def next(self):
-        with self._lock:
-            source = self.source
-        if not source:
-            return
+        with self._lock: source = self.source
+        if not source: return
         data = source.next()
         if data and self.callback:
             self.callback(data)
 
     def prev(self):
-        with self._lock:
-            source = self.source
-        if not source:
-            return
+        with self._lock: source = self.source
+        if not source: return
         data = source.prev()
         if data and self.callback:
             self.callback(data)
@@ -56,8 +52,6 @@ class DataWorker(threading.Thread):
 
     def load(self, source):
         with self._lock:
-            if self.source:
-                self.source.close()
+            if self.source: self.source.close()
             self.source = source
-            if self.source:
-                self.source.start()
+            if self.source: self.source.start()

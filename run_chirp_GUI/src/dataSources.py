@@ -56,6 +56,7 @@ class FileDataSource(DataSource):
         self.directory = directory
         self.paths = []
         self.index = 0
+        self.empty = True
 
     def start(self):
         self.paths = [
@@ -63,11 +64,14 @@ class FileDataSource(DataSource):
             for f in sorted(os.listdir(self.directory))
             if f.endswith('.npy')
         ]
+        self.empty = len(self.paths) == 0
         self.index = 0
     
-    def _slider(self, step) -> bytes:
-        if not self.paths:
-            return b""
+    def _slider(self, step):
+        if self.empty:
+            time.sleep(0.1)
+            return bytes()
+        print(self.index)
         path = self.paths[self.index]
         self.index = (self.index + step) % len(self.paths)
         data = np.load(path)

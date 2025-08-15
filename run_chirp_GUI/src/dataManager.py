@@ -76,9 +76,16 @@ class DataManager(QObject):
     def pause(self):
         self.worker.paused = True
 
-    def chirpOnce(self):
-        self.save_counter = 0
-        self.worker.next()
+    def next(self):
+        if self.worker.paused:
+            self.save_counter = 0
+            self.worker.next()
+
+    def prev(self):
+        if self.worker.paused:
+            self.save_counter = 0
+            self.worker.prev()
+
 
     def resume(self):
         self.worker.paused = False

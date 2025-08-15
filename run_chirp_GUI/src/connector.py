@@ -24,10 +24,15 @@ class Connector:
             )
         )
 
-        # One-time chirp
+        # Single run
         self.mainWindow.control_panel.next_btn.clicked.connect(
-            self.dataManager.chirpOnce
+            self.dataManager.next
         )
+
+        self.mainWindow.control_panel.next_btn.clicked.connect(
+            self.dataManager.prev
+        )
+
 
         # Save toggle
         self.mainWindow.control_panel.save_btn.clicked.connect(

@@ -38,8 +38,12 @@ class ControlPanel(QtWidgets.QWidget):
         self.start_btn.setCheckable(True)
         layout.addWidget(self.start_btn)
 
-        self.next_btn = QtWidgets.QPushButton("Single")
-        self.next_btn.setMaximumWidth(50)
+        self.prev_btn = QtWidgets.QPushButton()
+        self.prev_btn.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowLeft))
+        layout.addWidget(self.prev_btn)
+
+        self.next_btn = QtWidgets.QPushButton()
+        self.next_btn.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowRight))
         layout.addWidget(self.next_btn)
 
     # === Section 2: File Handling ===
